@@ -20,31 +20,34 @@
         };
     in
     {
-      nixosConfigurations.firecracker-container =
-        firecrackerSystem { isContainer = true; };
+      nixosConfigurations = {
+        firecracker-container =
+          firecrackerSystem { isContainer = true; };
 
-      nixosConfigurations.firecracker =
-        firecrackerSystem { isContainer = false; };
+        firecracker =
+          firecrackerSystem { isContainer = false; };
+      };
 
-      firecracker-vmlinux =
-        let system = self.nixosConfigurations.firecracker;
-        in system.config.system.build.kernel.dev;
+      packages.x86_64-linux = {
+        firecracker-vmlinux =
+          let system = self.nixosConfigurations.firecracker;
+          in system.config.system.build.kernel.dev;
 
-      firecracker-rootfs =
-        let
-          system = self.nixosConfigurations.firecracker-container;
-        in
-        import "${nixpkgs}/nixos/lib/make-disk-image.nix" {
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
-          lib = nixpkgs.lib;
-          diskSize = "auto";
-          config = system.config;
-          additionalSpace = "2G";
-          format = "raw";
-          partitionTableType = "none";
-          installBootLoader = false;
-          fsType = "ext4";
-        };
-
+        firecracker-rootfs =
+          let
+            system = self.nixosConfigurations.firecracker-container;
+          in
+          import "${nixpkgs}/nixos/lib/make-disk-image.nix" {
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+            lib = nixpkgs.lib;
+            diskSize = "auto";
+            config = system.config;
+            additionalSpace = "2G";
+            format = "raw";
+            partitionTableType = "none";
+            installBootLoader = false;
+            fsType = "ext4";
+          };
+      };
     };
 }

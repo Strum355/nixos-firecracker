@@ -1,5 +1,16 @@
 { isContainer }:
 { pkgs, config, lib, modulesPath, ... }:
+# let
+#   readConfig = configfile: import (localPkgs.runCommand "config.nix" { } ''
+#     echo "{" > "$out"
+#     while IFS='=' read key val; do
+#       [ "x''${key#CONFIG_}" != "x$key" ] || continue
+#       no_firstquote="''${val#\"}";
+#       echo '  "'"$key"'" = "'"''${no_firstquote%\"}"'";' >> "$out"
+#     done < "${configfile}"
+#     echo "}" >> $out
+#   '').outPath;
+# in
 {
   imports = [
     "${modulesPath}/profiles/minimal.nix"
@@ -13,11 +24,22 @@
     fi
   '';
 
+  systemd = {
+    services = {
+      nix-daemon.enable = false;
+      mount-pstore.enable = false;
+      sysctl.enable = false;
+    };
+    sockets.nix-daemon.enable = false;
+  };
+
   services = {
     openssh = {
       enable = true;
     };
     timesyncd.enable = false;
+    udisks2.enable = false;
+    getty.autologinUser = "root";
   };
 
   users.users.root = {
@@ -40,53 +62,73 @@
   ];
 
   networking = {
-    dhcpcd.enable = false;
     hostName = "nixos";
+    dhcpcd.enable = false;
+    firewall.enable = false;
+    wireless.enable = false;
   };
 
-  systemd.services.nix-daemon.enable = false;
-  systemd.sockets.nix-daemon.enable = false;
+  virtualisation.docker.enable = true;
+
+  security = {
+    polkit.enable = false;
+  };
 
   boot = {
-    initrd.supportedFilesystems = [ "ext4" ];
-    kernelParams = [ "console=ttyS0" "noapic" "reboot=k" "panic=1" "pci=off" "nomodules" "rw" "init=/nix/var/nix/profiles/system/init"];
+    kernelParams = [ "console=ttyS0" "noapic" "reboot=k" "panic=1" "pci=off" "nomodules" "rw" "init=/nix/var/nix/profiles/system/init" ];
     isContainer = isContainer;
     loader.grub.enable = false;
-    kernelPackages = pkgs.linuxPackages_latest.extend (self: super: {
-      kernel = super.kernel.override {
-        extraConfig = ''
-          PVH y
-          PARAVIRT y
-          PARAVIRT_TIME_ACCOUNTING y
-          HAVE_VIRT_CPU_ACCOUNTING_GEN y
-          VIRT_DRIVERS y
-          VIRTIO_BLK y
-          BLK_MQ_VIRTIO y
-          VIRTIO_NET y
-          VIRTIO_BALLOON y
-          VIRTIO_CONSOLE y
-          VIRTIO_MMIO y
-          VIRTIO_MMIO_CMDLINE_DEVICES y
-          VIRTIO_PCI y
-          VIRTIO_PCI_LIB y
-          VIRTIO_VSOCKETS m
-          EXT4_FS y
+    kernelModules = [ "dm-mod" ];
+    kernelPackages =
+      let
+        base = pkgs.linuxPackages_5_18;
+        version = "5.18.12";
+      in
+      pkgs.linuxPackagesFor (pkgs.linuxKernel.manualConfig {
+        inherit (pkgs) stdenv;
+        inherit (pkgs) lib;
+        inherit version;
+        src = pkgs.fetchurl {
+          url = "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${version}.tar.xz";
+          sha256 = "0bqmp0p36551war0k7agnkfb7vq7pl3hkyprk26iyn716cdgaly5";
+        };
+        configfile = ./microvm-kernel-x86_64.config;
+        allowImportFromDerivation = true;
+      });
 
-          # for Firecracker SendCtrlAltDel
-          SERIO_I8042 y
-          KEYBOARD_ATKBD y
-          # for Cloud-Hypervisor shutdown
-          ACPI_BUTTON y
-          EXPERT y
-          ACPI_REDUCED_HARDWARE_ONLY y
-        '';
-      };
-    });
+    # kernel = super.kernel.override {
+    #   structuredExtraConfig = with lib.kernel; {
+    #     PVH = yes;
+    #     PARAVIRT = yes;
+    #     PARAVIRT_TIME_ACCOUNTING = yes;
+    #     HAVE_VIRT_CPU_ACCOUNTING_GEN = yes;
+    #     VIRT_DRIVERS = yes;
+    #     VIRTIO_BLK = yes;
+    #     BLK_MQ_VIRTIO = yes;
+    #     VIRTIO_NET = yes;
+    #     VIRTIO_BALLOON = yes;
+    #     VIRTIO_CONSOLE = yes;
+    #     VIRTIO_MMIO = yes;
+    #     VIRTIO_MMIO_CMDLINE_DEVICES = yes;
+    #     VIRTIO_PCI = yes;
+    #     VIRTIO_PCI_LIB = yes;
+    #     VIRTIO_VSOCKETS = module;
+    #     EXT4_FS = yes;
+    #     MD = yes;
+
+    #     # for Firecracker SendCtrlAltDel;
+    #     SERIO_I8042 = yes;
+    #     KEYBOARD_ATKBD = yes;
+    #     # for Cloud-Hypervisor shutdown;
+    #     ACPI_BUTTON = yes;
+    #     EXPERT = yes;
+    #     ACPI_REDUCED_HARDWARE_ONLY = yes;
+    #   };
+    # };
   };
 
   fileSystems."/" = {
     device = "/dev/vda";
-    fsType = "ext4";
     # options = [ "ro" ];
   };
 
@@ -103,6 +145,8 @@
       ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system \
         --set /run/current-system
     '';
+
+  nix.gc.automatic = true;
 
   system.stateVersion = "22.05";
 }
