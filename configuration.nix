@@ -90,7 +90,7 @@
         inherit version;
         src = pkgs.fetchurl {
           url = "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${version}.tar.xz";
-          sha256 = "0bqmp0p36551war0k7agnkfb7vq7pl3hkyprk26iyn716cdgaly5";
+          sha256 = "sha256-QLdNCULyVdoHSBcQ4Qg0EtBuN+Rbj52eNK6FbbN7lSc=";
         };
         configfile = ./microvm-kernel-x86_64.config;
         allowImportFromDerivation = true;
