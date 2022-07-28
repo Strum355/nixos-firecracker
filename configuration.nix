@@ -16,14 +16,6 @@ in
     "${modulesPath}/profiles/minimal.nix"
   ];
 
-  programs.bash.promptInit = ''
-    if [ "$TERM" != "dumb" -o -n "$INSIDE_EMACS" ]; then
-      PS1=$'\[\e[1m\]\h\[\e[0m\]:\w\[\e[1m\]`eval "$PS1GIT"`\[\e[0m\]\$ '
-      PS1GIT='[[ `git status --short 2>/dev/null` ]] && echo \*'
-      [[ $TERM = xterm* ]] && PS1='\[\033]2;\h:\w\007\]'"$PS1"
-    fi
-  '';
-
   systemd = {
     package = systemdMini;
     services = {
@@ -50,35 +42,6 @@ in
       [ "server-user             nscd" ]
       [ "server-user             root" ]
       (builtins.readFile "${modulesPath}/services/system/nscd.conf");
-    # config.services.nscd.config;
-    # ''
-    #   server-user             root
-
-    #   enable-cache            passwd          yes
-    #   positive-time-to-live   passwd          0
-    #   negative-time-to-live   passwd          0
-    #   shared                  passwd          yes
-
-    #   enable-cache            group           yes
-    #   positive-time-to-live   group           0
-    #   negative-time-to-live   group           0
-    #   shared                  group           yes
-
-    #   enable-cache            netgroup        yes
-    #   positive-time-to-live   netgroup        0
-    #   negative-time-to-live   netgroup        0
-    #   shared                  netgroup        yes
-
-    #   enable-cache            hosts           yes
-    #   positive-time-to-live   hosts           0
-    #   negative-time-to-live   hosts           0
-    #   shared                  hosts           yes
-
-    #   enable-cache            services        yes
-    #   positive-time-to-live   services        0
-    #   negative-time-to-live   services        0
-    #   shared                  services        yes
-    # '';
   };
 
   users.users.root = {
