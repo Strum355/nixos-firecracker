@@ -19,6 +19,28 @@
           in
           system.config.system.build.kernel.dev;
 
+        ignite-kernel-image =
+          let
+            system = self.nixosConfigurations.firecracker;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          in pkgs.dockerTools.buildImage {
+            name = "strum355/ignite-kernel";
+            tag = "5.18.12";
+            contents = builtins.derivation {
+              name = "kernel-image";
+              system = "x86_64-linux";
+              builder = "${pkgs.bash}/bin/bash";
+              args = [
+                "-c" 
+                ''
+                  set -e
+                  ${pkgs.coreutils}/bin/mkdir -p $out/boot/ $out/lib/modules
+                  ${pkgs.coreutils}/bin/cp ${system.config.system.build.kernel.dev}/vmlinux $out/boot
+                ''
+              ];
+            };
+          };
+
         firecracker-rootfs =
           let
             system = self.nixosConfigurations.firecracker;
