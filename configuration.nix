@@ -1,3 +1,4 @@
+{ kernelVersion }:
 { pkgs, config, lib, modulesPath, ... }:
 let
   systemdMini = pkgs.systemdMinimal.override {
@@ -11,7 +12,7 @@ let
     withTpm2Tss = false;
   };
 in
-{
+with lib; with pkgs; {
   imports = [
     "${modulesPath}/profiles/minimal.nix"
   ];
@@ -38,7 +39,7 @@ in
     # timesyncd.enable = false;
     udisks2.enable = false;
     # getty.autologinUser = "root";
-    nscd.config = lib.replaceStrings
+    nscd.config = replaceStrings
       [ "server-user             nscd" ]
       [ "server-user             root" ]
       (builtins.readFile "${modulesPath}/services/system/nscd.conf");
@@ -59,7 +60,7 @@ in
   };
 
   environment = {
-    defaultPackages = with pkgs; [
+    defaultPackages = [
       nano
       curl
       nerdctl
@@ -81,7 +82,7 @@ in
   nixpkgs.overlays = [
     (self: super: {
       iptables = super.iptables-legacy;
-      containerd = (pkgs.callPackage "${pkgs.path}/pkgs/applications/virtualization/containerd" {
+      containerd = (callPackage "${path}/pkgs/applications/virtualization/containerd" {
         btrfs-progs = null;
       });
       openssh = (super.openssh.overrideAttrs (final: prev: {
@@ -93,7 +94,7 @@ in
       nerdctl = super.nerdctl.overrideAttrs (final: prev: {
         postInstall = ''
           wrapProgram $out/bin/nerdctl \
-            --prefix CNI_PATH : "${pkgs.cni-plugins}/bin"
+            --prefix CNI_PATH : "${cni-plugins}/bin"
           installShellCompletion --cmd nerdctl \
             --bash <($out/bin/nerdctl completion bash) \
             --fish <($out/bin/nerdctl completion fish) \
@@ -138,20 +139,20 @@ in
     kernelParams = [ "console=ttyS0" "noapic" "reboot=k" "panic=1" "pci=off" "nomodules" "rw" "init=/nix/var/nix/profiles/system/init" ];
     loader.grub.enable = false;
     initrd.includeDefaultModules = false;
-    initrd.availableKernelModules = lib.mkForce [ ];
+    initrd.availableKernelModules = mkForce [ ];
     kernelModules = [ "dm-mod" ];
     kernelPackages =
       let
-        base = pkgs.linuxPackages_5_18;
-        version = "5.18.12";
+        version = kernelVersion; # e.g. 5.10.135
+        pkgsVersion = concatStringsSep "_" (take 2 (splitString "." version)); # e.g. 5_10
+        majorVersion = head (splitString "." version); # e.g. 5
+        base = "linuxPackages_${pkgsVersion}";
       in
-      pkgs.linuxPackagesFor (pkgs.linuxKernel.manualConfig {
-        inherit (pkgs) stdenv;
-        inherit (pkgs) lib;
-        inherit version;
-        src = pkgs.fetchurl {
-          url = "https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${version}.tar.xz";
-          sha256 = "sha256-QLdNCULyVdoHSBcQ4Qg0EtBuN+Rbj52eNK6FbbN7lSc=";
+      linuxPackagesFor (linuxKernel.manualConfig {
+        inherit stdenv lib version;
+        src = fetchTarball {
+          url = "https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x/linux-${version}.tar.xz";
+          sha256 = "sha256-qNCcrECmuBE9YDwXSs0hbe7clhqczfJeEGP/nNjE1zY=";
         };
         configfile = ./microvm-kernel-x86_64.config;
         allowImportFromDerivation = true;

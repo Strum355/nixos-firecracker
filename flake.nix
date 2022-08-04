@@ -4,12 +4,17 @@
   };
 
   outputs = { self, nixpkgs, ... }:
+    let
+      kernelVersion = "5.10.135";
+    in
     {
-      nixosConfigurations = {
-        firecracker = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [ ./configuration.nix ];
-        };
+      nixosConfigurations.firecracker = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          (import ./configuration.nix {
+            kernelVersion = kernelVersion;
+          })
+        ];
       };
 
       packages.x86_64-linux = {
@@ -23,19 +28,23 @@
           let
             system = self.nixosConfigurations.firecracker;
             pkgs = nixpkgs.legacyPackages.x86_64-linux;
-          in pkgs.dockerTools.buildImage {
+          in
+          with pkgs;
+          dockerTools.buildImage {
             name = "strum355/ignite-kernel";
-            tag = "5.18.12";
+            tag = kernelVersion;
             contents = builtins.derivation {
               name = "kernel-image";
               system = "x86_64-linux";
-              builder = "${pkgs.bash}/bin/bash";
+              builder = "${bash}/bin/bash";
               args = [
-                "-c" 
+                "-c"
                 ''
                   set -e
-                  ${pkgs.coreutils}/bin/mkdir -p $out/boot/ $out/lib/modules
-                  ${pkgs.coreutils}/bin/cp ${system.config.system.build.kernel.dev}/vmlinux $out/boot
+                  # ignite requires /lib/modules to be present in the image
+                  ${coreutils}/bin/mkdir -p $out/boot/ $out/lib/modules
+                  # copy the kernel vmlinux bin
+                  ${coreutils}/bin/cp ${system.config.system.build.kernel.dev}/vmlinux $out/boot
                 ''
               ];
             };
@@ -44,9 +53,10 @@
         firecracker-rootfs =
           let
             system = self.nixosConfigurations.firecracker;
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
           in
           import "${nixpkgs}/nixos/lib/make-disk-image.nix" {
-            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+            inherit pkgs;
             inherit (nixpkgs) lib;
             diskSize = "auto";
             config = system.config;
